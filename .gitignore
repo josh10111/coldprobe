@@ -1,0 +1,33 @@
+# secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# local data
+*.db
+*.db-journal
+*.db.lock
+*.sqlite*
+data/
+
+# build output / deps
+bin/
+/dist/
+node_modules/
+# //go:embed needs web/dist/.gitkeep to compile, so ignore the contents, not the directory.
+web/dist/*
+!web/dist/.gitkeep
+coverage/
+*.out
+
+# editors / OS
+.idea/
+.vscode/
+.DS_Store
+
+
+# python worker
+worker/.venv/
+__pycache__/

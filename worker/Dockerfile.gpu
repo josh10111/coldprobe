@@ -1,0 +1,19 @@
+# GPU variant for matmul_n jobs. runtime, not devel: nvcc would only add GBs to every cold pull.
+# CUDA 12.8 is the first release whose torch wheels run on Blackwell, which Runpod pools include.
+FROM pytorch/pytorch:2.8.0-cuda12.8-cudnn9-runtime
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1
+
+RUN useradd --create-home --uid 10001 worker
+
+WORKDIR /app
+
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+COPY handler.py .
+
+USER worker
+
+CMD ["python", "-u", "handler.py"]

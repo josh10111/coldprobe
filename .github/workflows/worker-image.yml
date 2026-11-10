@@ -1,0 +1,55 @@
+name: worker-image
+
+on:
+  # Endpoints run :latest, so an experiment branch must not replace it.
+  push:
+    branches:
+      - main
+      - build/mvp
+    paths:
+      - "worker/**"
+      - ".github/workflows/worker-image.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  build-push:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+      - name: Test handler
+        working-directory: worker
+        run: |
+          pip install -r requirements-dev.txt
+          python -m pytest -q
+
+      - name: Short SHA
+        id: sha
+        run: echo "short=${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+
+      - uses: docker/setup-buildx-action@v4
+
+      - uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # :latest is what endpoints use; :sha-<short> lets a benchmark name the exact image.
+      - uses: docker/build-push-action@v7
+        with:
+          context: worker
+          platforms: linux/amd64
+          push: true
+          # A plain image, not an index with an unknown/unknown manifest that some pullers reject.
+          provenance: false
+          tags: |
+            ghcr.io/josh10111/coldprobe-worker:latest
+            ghcr.io/josh10111/coldprobe-worker:sha-${{ steps.sha.outputs.short }}

@@ -1,0 +1,10 @@
+# Secrets never reach the daemon, so no COPY can put them in a layer.
+**/.env*
+!.env.example
+.git
+data
+**/*.db*
+**/node_modules
+web/dist
+bin
+worker/.venv

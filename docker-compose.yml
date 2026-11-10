@@ -1,0 +1,22 @@
+services:
+  app:
+    build: .
+    env_file: .env
+    environment:
+      # Overrides .env's 127.0.0.1:8080, which would bind the container's own loopback.
+      COLDPROBE_ADDR: ":8080"
+    # Loopback only: the API has no login and can start billable runs.
+    ports: ["127.0.0.1:8080:8080"]
+    volumes: [coldprobe-data:/data]
+    restart: unless-stopped
+    # Worst case: an in-flight endpoint create (60 s) plus its teardown (30 s).
+    stop_grace_period: 120s
+    stop_signal: SIGTERM
+    healthcheck:
+      test: ["CMD", "/coldprobe", "healthcheck"]
+      interval: 10s
+      # The startup janitor can make slow Runpod calls before the first check passes.
+      start_period: 60s
+
+volumes:
+  coldprobe-data:

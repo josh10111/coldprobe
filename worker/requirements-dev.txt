@@ -1,0 +1,3 @@
+# Kept out of requirements.txt so pytest never lands in the image.
+-r requirements.txt
+pytest==9.2.0

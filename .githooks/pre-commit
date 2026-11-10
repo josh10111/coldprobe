@@ -1,0 +1,11 @@
+#!/bin/sh
+# Fails closed: without gitleaks the commit is refused rather than going unscanned.
+GITLEAKS=$(command -v gitleaks || echo "$HOME/go/bin/gitleaks")
+
+if [ ! -x "$GITLEAKS" ]; then
+  echo "pre-commit: gitleaks not found, refusing to commit." >&2
+  echo "Install it: go install github.com/zricethezav/gitleaks/v8@latest" >&2
+  exit 1
+fi
+
+exec "$GITLEAKS" git --pre-commit --staged --redact --no-banner
