@@ -1,6 +1,6 @@
 # No secret at build time: the API key reaches the container only as a runtime env var.
 
-FROM node:24.22.2-alpine3.24 AS web
+FROM node:26.13.0-alpine3.24 AS web
 WORKDIR /src/web
 COPY web/package.json web/package-lock.json ./
 RUN npm ci
