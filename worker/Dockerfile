@@ -1,5 +1,5 @@
 # slim: runpod installs from wheels, so no compilers are needed.
-FROM python:3.12.16-slim-bookworm
+FROM python:3.15.0-slim-bookworm
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1
