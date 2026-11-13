@@ -492,7 +492,7 @@ func (r *Runner) protocol(ctx context.Context, c *configRun) error {
 	p, t := c.run.p, r.Timeouts
 
 	// Long waits repeat a "still waiting" line so the UI never sits silent.
-	r.logf(c, "first boot: waiting for a worker on %s", c.label())
+	r.logAt(c, logWait, "first boot: waiting for a worker on %s", c.label())
 	stop := r.waiting(c, "a worker")
 	stopWarn := r.warnIfNoWorker(ctx, c)
 	first := r.timedJob(ctx, c, "first_boot", t.FirstBoot)
@@ -503,8 +503,10 @@ func (r *Runner) protocol(ctx context.Context, c *configRun) error {
 	}
 	// No worker ever ran the first job; every later phase would time out too.
 	if first.Status != completed {
+		r.logAt(c, logError, "first boot: %s: %s", first.Status, first.Error)
 		return fmt.Errorf("first boot did not complete (%s: %s): no worker ran a job, e.g. the pool has no stock", first.Status, first.Error)
 	}
+	r.logAt(c, logOK, "first boot: worker %s connected, first request answered in %s", first.WorkerID, secsTenth(first.WallMs))
 
 	for i := range p.ColdStarts {
 		sample := fmt.Sprintf("cold sample %d/%d", i+1, p.ColdStarts)
@@ -520,7 +522,7 @@ func (r *Runner) protocol(ctx context.Context, c *configRun) error {
 				return restoreErr
 			}
 		} else {
-			r.logf(c, "%s: waiting for workers to scale to zero", sample)
+			r.logAt(c, logWait, "%s: waiting for workers to scale to zero", sample)
 			err = r.waitScaledToZero(ctx, c)
 		}
 		if err != nil {
@@ -529,25 +531,30 @@ func (r *Runner) protocol(ctx context.Context, c *configRun) error {
 			}
 			// A sample on a warm worker would be a fake cold start. Don't
 			// retry either: each try keeps a possibly billing worker up.
-			r.logf(c, "cold starts %d to %d of %d skipped: %v", i+1, p.ColdStarts, p.ColdStarts, err)
+			r.logAt(c, logNote, "cold starts %d to %d of %d skipped: %v", i+1, p.ColdStarts, p.ColdStarts, err)
 			break
 		}
 		r.logf(c, "%s: sending", sample)
 		stop := r.waiting(c, "a worker")
-		r.timedJob(ctx, c, "cold", t.Cold)
+		j := r.timedJob(ctx, c, "cold", t.Cold)
 		stop()
 		if err := context.Cause(ctx); err != nil {
 			return err
 		}
+		r.logJob(c, sample, j)
 	}
 
 	r.logf(c, "warm: %d sequential requests", p.WarmRequests)
+	warmOK := 0
 	for range p.WarmRequests {
-		r.timedJob(ctx, c, "warm", t.Warm)
+		if r.timedJob(ctx, c, "warm", t.Warm).Status == completed {
+			warmOK++
+		}
 		if err := context.Cause(ctx); err != nil {
 			return err
 		}
 	}
+	r.logAt(c, countLevel(warmOK, p.WarmRequests), "warm: %d of %d completed", warmOK, p.WarmRequests)
 
 	for _, rps := range p.LevelsRPS {
 		r.loadLevel(ctx, c, rps)
@@ -570,11 +577,11 @@ func (r *Runner) protocol(ctx context.Context, c *configRun) error {
 // still have reached Runpod; restoring an unpaused endpoint is a no-op.
 func (r *Runner) forceNewWorker(ctx context.Context, c *configRun, sample string) (waitErr, restoreErr error) {
 	id, n := c.row.EndpointID, c.run.p.MaxWorkers
-	r.logf(c, "%s: pausing the endpoint to force a new worker (workers.max 0)", sample)
+	r.logAt(c, logWait, "%s: pausing the endpoint to force a new worker (workers.max 0)", sample)
 	if waitErr = r.Mgmt.SetMaxWorkers(ctx, id, 0); waitErr != nil {
 		c.noteGone(waitErr)
 	} else {
-		r.logf(c, "%s: endpoint paused, waiting for workers to scale to zero", sample)
+		r.logAt(c, logWait, "%s: endpoint paused, waiting for workers to scale to zero", sample)
 		waitErr = r.waitScaledToZero(ctx, c)
 	}
 	r.logf(c, "%s: restoring workers.max to %d", sample, n)
@@ -585,7 +592,7 @@ func (r *Runner) forceNewWorker(ctx context.Context, c *configRun, sample string
 			return waitErr, err
 		}
 		restoreErr = fmt.Errorf("%s: could not restore workers.max to %d after pausing the endpoint, so it may still be paused; no more jobs sent: %w", sample, n, err)
-		r.logf(c, "%v", restoreErr)
+		r.logAt(c, logError, "%v", restoreErr)
 	}
 	return waitErr, restoreErr
 }
@@ -647,15 +654,24 @@ func (r *Runner) loadLevel(ctx context.Context, c *configRun, rps float64) {
 	defer cancel()
 
 	r.logf(c, "level %v req/s: sending for %d s, then draining up to %d s", rps, p.LevelSeconds, p.DrainSeconds)
+	var mu sync.Mutex
+	sent, ok := 0, 0
 	OpenLoop(sendCtx, rps, level, func(ctx context.Context, intended time.Time) {
-		r.runJob(ctx, c, "load", rps, intended)
+		j := r.runJob(ctx, c, "load", rps, intended)
+		mu.Lock()
+		sent++
+		if j.Status == completed {
+			ok++
+		}
+		mu.Unlock()
 	})
 
 	if ctx.Err() != nil {
 		return // the run is ending; teardown deletes the queue with the endpoint
 	}
+	r.logAt(c, countLevel(ok, sent), "level %v req/s: %d of %d completed", rps, ok, sent)
 	if err := r.Jobs.PurgeQueue(ctx, c.row.EndpointID); err != nil {
-		r.logf(c, "purge queue after the %v req/s level: %v", rps, err)
+		r.logAt(c, logError, "purge queue after the %v req/s level: %v", rps, err)
 	}
 }
 
@@ -683,7 +699,7 @@ func (r *Runner) runJob(ctx context.Context, c *configRun, phase string, level f
 	// WithoutCancel: a job cut short by a cancel must still be saved.
 	id, err := r.Store.InsertJob(context.WithoutCancel(ctx), j)
 	if err != nil {
-		r.logf(c, "save %s job: %v", phase, err)
+		r.logAt(c, logError, "save %s job: %v", phase, err)
 	}
 	j.ID = id
 	if j.Status == completed {
@@ -856,7 +872,7 @@ func (r *Runner) gpuType(ctx context.Context, c *configRun, workerID string) str
 func (r *Runner) snapshotMetrics(ctx context.Context, c *configRun) {
 	ctx, cancel := context.WithTimeout(ctx, r.MetricsWait)
 	defer cancel()
-	r.logf(c, "collecting Runpod metrics (up to %s)", secs(r.MetricsWait))
+	r.logAt(c, logWait, "collecting Runpod metrics (up to %s)", secs(r.MetricsWait))
 	stop := r.waiting(c, "Runpod metrics")
 	c.mu.Lock()
 	want := c.completed
@@ -889,20 +905,20 @@ func (r *Runner) snapshotMetrics(ctx context.Context, c *configRun) {
 	stop()
 
 	if c.metricsErr != nil {
-		r.logf(c, "%v (%v)", c.metricsErr, lastErr)
+		r.logAt(c, logNote, "%v (%v)", c.metricsErr, lastErr)
 	}
 	if !have {
 		if c.metricsErr == nil {
-			r.logf(c, "no Runpod metrics saved: %v", lastErr)
+			r.logAt(c, logNote, "no Runpod metrics saved: %v", lastErr)
 		}
 		return
 	}
 	if n := requestCount(last); n < want {
-		r.logf(c, "Runpod metrics count %d requests, we completed %d; saved them anyway", n, want)
+		r.logAt(c, logNote, "Runpod metrics count %d requests, we completed %d; saved them anyway", n, want)
 	}
 	b, err := json.Marshal(last)
 	if err != nil {
-		r.logf(c, "encode Runpod metrics: %v", err)
+		r.logAt(c, logError, "encode Runpod metrics: %v", err)
 		return
 	}
 	c.row.RPMetrics = b
@@ -932,7 +948,7 @@ func (r *Runner) teardown(ctx context.Context, c *configRun) error {
 	purgeCtx, cancelPurge := context.WithTimeout(ctx, purgeTimeout)
 	// A 404 or 409 means the endpoint is likely gone already; DELETE's 404 counts as success.
 	if err := r.Jobs.PurgeQueue(purgeCtx, id); err != nil && !isGoneHint(err) {
-		r.logf(c, "purge queue before delete: %v", err)
+		r.logAt(c, logError, "purge queue before delete: %v", err)
 	}
 	cancelPurge()
 
@@ -944,9 +960,10 @@ func (r *Runner) teardown(ctx context.Context, c *configRun) error {
 			now := time.Now().UTC()
 			c.row.DeletedAt = &now
 			c.run.meter.close(c.span, now)
+			r.logAt(c, logOK, "endpoint deleted")
 			return nil
 		}
-		r.logf(c, "delete endpoint %s, attempt %d of %d: %v", id, i+1, tries, err)
+		r.logAt(c, logError, "delete endpoint %s, attempt %d of %d: %v", id, i+1, tries, err)
 		if i == len(deleteWaits) {
 			break // out of tries
 		}
@@ -1042,7 +1059,7 @@ func (r *Runner) setStatus(ctx context.Context, c *configRun, status string) {
 
 func (r *Runner) saveConfig(ctx context.Context, c *configRun) {
 	if err := r.Store.UpdateConfig(context.WithoutCancel(ctx), c.row); err != nil {
-		r.logf(c, "save config: %v", err)
+		r.logAt(c, logError, "save config: %v", err)
 	}
 }
 
@@ -1065,6 +1082,19 @@ func (r *Runner) logf(c *configRun, format string, args ...any) {
 	r.emit(c.run.id, c.row.ID, "log", map[string]any{"msg": fmt.Sprintf(format, args...)})
 }
 
+// Log levels the UI colours by: ok green, wait and note amber, error red.
+// "warn" is reserved for the no-worker warning, which the UI also toasts.
+const (
+	logOK    = "ok"
+	logWait  = "wait"
+	logNote  = "note"
+	logError = "error"
+)
+
+func (r *Runner) logAt(c *configRun, level, format string, args ...any) {
+	r.emit(c.run.id, c.row.ID, "log", map[string]any{"level": level, "msg": fmt.Sprintf(format, args...)})
+}
+
 // waiting logs "still waiting for <what>" every ProgressEvery until stop is
 // called; stop waits for the goroutine, so no late line lands.
 func (r *Runner) waiting(c *configRun, what string) (stop func()) {
@@ -1079,7 +1109,7 @@ func (r *Runner) waiting(c *configRun, what string) (stop func()) {
 			case <-done:
 				return
 			case <-t.C:
-				r.logf(c, "still waiting for %s (%s)", what, secs(time.Since(start)))
+				r.logAt(c, logWait, "still waiting for %s (%s)", what, secs(time.Since(start)))
 			}
 		}
 	}()
@@ -1119,6 +1149,26 @@ func (r *Runner) warnIfNoWorker(ctx context.Context, c *configRun) (stop func())
 // noWorkerMsg is the warning for a first boot with no worker placed on label.
 func noWorkerMsg(label string, d time.Duration) string {
 	return fmt.Sprintf("No worker placed on %s after %s. The pool may be out of stock; Cancel stops the run.", label, secs(d))
+}
+
+func (r *Runner) logJob(c *configRun, what string, j store.Job) {
+	if j.Status == completed {
+		r.logAt(c, logOK, "%s: done in %s", what, secsTenth(j.WallMs))
+		return
+	}
+	r.logAt(c, logError, "%s: %s: %s", what, j.Status, j.Error)
+}
+
+func countLevel(ok, of int) string {
+	if ok == of {
+		return logOK
+	}
+	return logNote
+}
+
+// secsTenth formats milliseconds as seconds to a tenth, e.g. "12.3 s".
+func secsTenth(ms float64) string {
+	return fmt.Sprintf("%.1f s", ms/1000)
 }
 
 // secs formats d as whole seconds, e.g. "90 s".

@@ -1,7 +1,7 @@
 import { nearestRank } from './chartData'
 import { coldNote, type ColdNote } from './coldNote'
 import { cardName, configName, poolIndex } from './format'
-import type { ConfigDetail, FlashBoot, Job, Pool, RunDetail } from './types'
+import type { ConfigDetail, FlashBoot, Job, Params, Pool, RunDetail } from './types'
 
 // One config's numbers for the spec table. "No data" is null (shown as "—").
 export interface SpecRow {
@@ -63,6 +63,23 @@ export interface LevelRow {
   p95Ms: number | null
   latencyN: number
   throughputRps: number
+}
+
+// A worker runs one job at a time and the job is mostly a sleep, so
+// maxWorkers * (1000 / jobSleepMs) is the endpoint's ceiling.
+export const LOAD_LEVELS_SUB = "These rows measure Runpod's queueing and autoscaling, not the GPU."
+
+export function loadLevelsNote(p: Params): string {
+  const perWorker = 1000 / p.jobSleepMs
+  const round = (x: number) => String(Number(x.toFixed(1)))
+  const job = p.matmulN ? `sleeps ${p.jobSleepMs} ms after its matmul` : `only sleeps ${p.jobSleepMs} ms; it doesn't use the GPU`
+  const speed = p.matmulN ? 'For GPU speed, see the GPU matmul table.' : 'For GPU speed, run with a matmul size above 0.'
+  return (
+    `Each job ${job}, and a worker runs one job at a time, ` +
+    `so a worker serves about ${round(perWorker)} req/s and an endpoint at most about ${round(perWorker * p.maxWorkers)} req/s with ${p.maxWorkers} max workers. ` +
+    `Above that, or while Runpod is still starting workers, requests queue: latency climbs and completed req/s falls below offered. ` +
+    `Differences between GPUs here mostly come from when Runpod brought up the next worker. ${speed}`
+  )
 }
 
 export function levelRows(d: RunDetail, catalog?: Pool[]): LevelRow[] {

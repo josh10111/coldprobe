@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { levelRows, specRows, topLevelWords } from '../specRows'
-import { cardMode, catalog, levelSum, naturalTwoPool, singleConfig } from './fixtures'
+import { levelRows, loadLevelsNote, specRows, topLevelWords } from '../specRows'
+import { cardMode, catalog, levelSum, naturalTwoPool, runDetail, singleConfig } from './fixtures'
 
 describe('topLevelWords', () => {
   const t = { rps: 8, sent: 240, served: 240, leftQueued: 0, failed: 0, reached: true }
@@ -104,5 +104,22 @@ describe('levelRows', () => {
   it('card mode names rows by the card, with the catalog\'s display name', () => {
     expect(levelRows(cardMode(), catalog())[0].name).toBe('RTX A4500 FlashBoot off')
     expect(levelRows(cardMode())[0].name).toBe('NVIDIA RTX A4500 FlashBoot off')
+  })
+})
+
+describe('loadLevelsNote', () => {
+  const p = { ...runDetail([]).run.params, jobSleepMs: 500, maxWorkers: 3 }
+  it('gives the endpoint ceiling and says the sleep job never touches the GPU', () => {
+    const t = loadLevelsNote({ ...p, matmulN: 0 })
+    expect(t.startsWith('Each job only sleeps 500 ms')).toBe(true)
+    expect(t).toContain("only sleeps 500 ms; it doesn't use the GPU")
+    expect(t).toContain('about 2 req/s and an endpoint at most about 6 req/s with 3 max workers')
+    expect(t).toContain('run with a matmul size above 0')
+  })
+  it('points at the matmul table when the run measured GPU speed', () => {
+    const t = loadLevelsNote({ ...p, jobSleepMs: 300, matmulN: 4096 })
+    expect(t).toContain('sleeps 300 ms after its matmul')
+    expect(t).toContain('about 3.3 req/s and an endpoint at most about 10 req/s')
+    expect(t).toContain('see the GPU matmul table')
   })
 })

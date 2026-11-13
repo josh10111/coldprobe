@@ -1,14 +1,14 @@
 import { describe, expect, it } from 'vitest'
 import { checkSeq } from '../api'
 import { configLabel, configName, duration, latestResults, matmulSuffix, poolIndex, reportTitle, runHeading, runSubject, secs, sig3, statusTone, stockWord, usd, usd3sf, when } from '../format'
-import { estimateKey, fieldError, formErrors, formFromDefaults, GPU_IMAGE, levelsError, needsGpuImage, parseNumberList, pickerRows, rangeHelp, stockWarning, switchGpuMode, toggleGpu, toParams } from '../form'
+import { estimateKey, fieldError, flashbootSummary, formErrors, formFromDefaults, GPU_IMAGE, levelsError, needsGpuImage, parseNumberList, pickerRows, rangeHelp, stockWarning, switchGpuMode, toggleGpu, toParams } from '../form'
 import { lowerIndex, MIN_SAMPLES, THIN_SAMPLES_HELP, thinSamplesHidWinner } from '../finding'
 import { coldHeadline, headlineNumbers } from '../headlineToast'
 import { applyEvent, phaseWord, withSnapshot } from '../liveRun'
 import { sharedExtent } from '../trace'
 import type { Card, ConfigDetail, Job, LogEvent, Pool, Run, RunEvent, RunStatus } from '../types'
 import { catalog, configDetail, job as fxJob, levelSum, runDetail } from './fixtures'
-import { expectedLoadJobs, liveWords } from '../phases'
+import { expectedLoadJobs, firstBootWait, liveWords, runProgress } from '../phases'
 import { liveSpecRows } from '../specRows'
 
 describe('checkSeq (SSE gap check)', () => {
@@ -174,6 +174,19 @@ describe('inline field checks (the server\'s ranges, from limits)', () => {
     expect(formErrors(f, LIMITS, 2)).toEqual({})
     const bad = { ...f, levels: '1, 2, 3, 4', nums: { ...f.nums, maxWorkers: '4', budgetUsd: '3', warmRequests: '' } }
     expect(formErrors(bad, LIMITS, 2)).toEqual({ maxWorkers: '1 to 3', budgetUsd: 'at most $2.00', warmRequests: 'required', levels: '1 to 3 levels' })
+  })
+  it('formErrors: flags an empty FlashBoot selection', () => {
+    const d = { ...runDetail([]).run.params, maxWorkers: 2, pools: [], coldStartMode: 'natural' as const, budgetCapUsd: 2, limits: LIMITS }
+    const f = formFromDefaults(d)
+    expect(formErrors({ ...f, flashboot: [] }, LIMITS, 2)).toEqual({ flashboot: 'pick at least one' })
+  })
+  it('flashbootSummary: says how many endpoints each setting makes', () => {
+    expect(flashbootSummary(['OFF', 'FLASHBOOT'], 2)).toBe(
+      'Each of the 2 GPUs is measured twice, on separate endpoints: once without FlashBoot and once with it, so you can compare them (4 configs).',
+    )
+    expect(flashbootSummary(['FLASHBOOT'], 1)).toBe('The GPU is measured once, with FlashBoot (1 config). Tick both to compare.')
+    expect(flashbootSummary(['OFF'], 0)).toBe('Each GPU is measured once, without FlashBoot. Tick both to compare.')
+    expect(flashbootSummary([], 2)).toBe('Pick at least one setting to measure.')
   })
   it('rangeHelp: the sentence each field\'s help ends with, from limits', () => {
     expect(rangeHelp('maxWorkers', LIMITS)).toBe('1 to 3.')
@@ -421,6 +434,24 @@ describe('applyEvent', () => {
     expect(l.bound).toEqual({ boundUsd: 0.4, capUsd: 2 })
     expect(withSnapshot(l, l.detail).activity[1]).toBe('warm: 10 sequential requests')
   })
+  it('colours log lines by level: ok green, wait/note/warn amber, error red, none plain', () => {
+    const tones = (['ok', 'wait', 'note', 'warn', 'error', undefined] as const).map(
+      (level) => applyEvent(live(), { ...base, type: 'log', configId: 1, data: { msg: 'x', level } }).logs[0].tone,
+    )
+    expect(tones).toEqual(['ok', 'warn', 'warn', 'warn', 'bad', undefined])
+  })
+  it('logs a config failing and the run ending, once each', () => {
+    let l = applyEvent(live(), { ...base, type: 'config_status', configId: 1, data: { status: 'failed', detail: 'first boot did not complete' } })
+    l = applyEvent(l, { ...base, type: 'config_status', configId: 1, data: { status: 'failed', detail: 'first boot did not complete' } })
+    l = applyEvent(l, { ...base, type: 'run_status', data: { status: 'failed', error: 'every config failed' } })
+    l = applyEvent(l, { ...base, type: 'run_status', data: { status: 'failed', error: 'every config failed' } })
+    expect(l.logs.map((x) => [x.tone, x.msg])).toEqual([
+      ['bad', 'failed: first boot did not complete'],
+      ['bad', 'Run failed: every config failed'],
+    ])
+    const done = applyEvent(live(), { ...base, type: 'run_status', data: { status: 'completed' } })
+    expect(done.logs.map((x) => [x.tone, x.msg])).toEqual([['ok', 'Run completed']])
+  })
   it("a new run's snapshot doesn't inherit the previous run's logs or bound", () => {
     let l = applyEvent(live(), { ...base, type: 'log', configId: 1, data: { msg: 'tearing down' } })
     l = applyEvent(l, { ...base, type: 'cost', data: { boundUsd: 0.4, capUsd: 2 } })
@@ -579,5 +610,42 @@ describe("home: a running config's phase word", () => {
     expect(phaseWord(p, at('done'))).toBe('done')
     expect(phaseWord(p, at('failed'))).toBe('failed')
     expect(phaseWord(p, at('cancelled'))).toBe('cancelled')
+  })
+})
+
+describe('firstBootWait (the latency chart before anything is drawn)', () => {
+  const t0 = Date.parse('2026-11-08T10:00:00Z')
+  const cd = (status: ConfigDetail['config']['status'], jobs: Job[] = []) => {
+    const c = configDetail(1, 'AMPERE_16', 'OFF')
+    return { ...c, config: { ...c.config, status }, jobs }
+  }
+  it('follows the config from queued to connected', () => {
+    expect(firstBootWait(cd('pending'), t0)).toEqual({ text: 'queued' })
+    expect(firstBootWait(cd('creating'), t0)).toEqual({ text: 'creating the endpoint', tone: 'warn' })
+    expect(firstBootWait(cd('running'), t0 + 42_500)).toEqual({ text: 'waiting for a GPU worker · 42 s', tone: 'warn' })
+    expect(firstBootWait(cd('running', [fxJob(1, 1, 'first_boot', 0, 13_200)]), t0)).toEqual({
+      text: 'worker connected · first request in 13.2 s',
+      tone: 'ok',
+    })
+    expect(firstBootWait(cd('failed'), t0)).toEqual({ text: 'failed', tone: 'bad' })
+  })
+})
+
+describe('runProgress', () => {
+  // 1 cold, 2 warm, one level of 1 req/s for 2 s: 4 phases per config.
+  const p = { ...runDetail([]).run.params, coldStarts: 1, warmRequests: 2, levelsRps: [1], levelSeconds: 2 }
+  const cd = (status: ConfigDetail['config']['status'], jobs: Job[] = []) => {
+    const c = configDetail(1, 'AMPERE_16', 'OFF')
+    return { ...c, config: { ...c.config, status }, jobs }
+  }
+  it('is 0 before any request and counts ended configs as complete', () => {
+    expect(runProgress(p, [cd('creating'), cd('running')])).toEqual({ fraction: 0, configsDone: 0, configs: 2 })
+    expect(runProgress(p, [cd('done'), cd('failed')])).toEqual({ fraction: 1, configsDone: 2, configs: 2 })
+  })
+  it('fills each phase by its share of requests', () => {
+    const jobs = [fxJob(1, 1, 'first_boot', 0, 20_000), fxJob(2, 1, 'cold', 30, 8_000), fxJob(3, 1, 'warm', 40, 500)]
+    // first boot 1 + cold 1 + warm 1/2 + load 0, over 4 phases
+    expect(runProgress(p, [cd('running', jobs)]).fraction).toBeCloseTo(2.5 / 4)
+    expect(runProgress(p, [cd('running', jobs), cd('done')]).fraction).toBeCloseTo((2.5 / 4 + 1) / 2)
   })
 })

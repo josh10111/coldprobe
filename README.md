@@ -109,7 +109,7 @@ UI tests are `npm test` in `web/` (vitest). The full smoke test (`bash scripts/s
 - **The report** is React + Recharts in a spec-sheet style, drawn from the stored jobs and summaries, with every number labelled in plain words and its sample size beside it.
 - **The worker** is a synthetic Python handler that sleeps for `sleep_ms`, published as a public image on GHCR. It measures platform overhead (scheduling, boot, queueing), not model speed.
 
-![The New run page in pool mode: a table of Runpod's GPU pools with the cards each may hand out, VRAM, the price per hour and the stock now (high, medium, low or none, in colour), above the FlashBoot, cold-start mode and load settings](docs/images/new-run.png)
+![The New run page in pool mode: a table of Runpod's GPU pools with the cards each may hand out, VRAM, the price per hour and the stock now (high, medium, low or none, in colour), with AMPERE_16 and AMPERE_24 ticked, above the FlashBoot settings (both ticked: each GPU measured once without FlashBoot and once with it, 4 configs), cold-start mode and load settings](docs/images/new-run.png)
 
 Picking GPUs by pool or by card, with current price and stock.
 

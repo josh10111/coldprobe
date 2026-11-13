@@ -127,7 +127,7 @@ export function levelsError(text: string, limits: Limits): string | null {
   return null
 }
 
-export type FormErrors = Partial<Record<NumKey | 'levels', string>>
+export type FormErrors = Partial<Record<NumKey | 'levels' | 'flashboot', string>>
 
 export function formErrors(f: FormState, limits: Limits, capUsd: number): FormErrors {
   const out: FormErrors = {}
@@ -137,7 +137,17 @@ export function formErrors(f: FormState, limits: Limits, capUsd: number): FormEr
   }
   const e = levelsError(f.levels, limits)
   if (e) out.levels = e
+  if (f.flashboot.length === 0) out.flashboot = 'pick at least one'
   return out
+}
+
+export function flashbootSummary(flashboot: FlashBoot[], gpus: number): string {
+  if (flashboot.length === 0) return 'Pick at least one setting to measure.'
+  const each = gpus === 1 ? 'The GPU' : gpus > 1 ? `Each of the ${gpus} GPUs` : 'Each GPU'
+  const total = gpus > 0 ? ` (${gpus * flashboot.length} config${gpus * flashboot.length === 1 ? '' : 's'})` : ''
+  if (flashboot.length === 2)
+    return `${each} is measured twice, on separate endpoints: once without FlashBoot and once with it, so you can compare them${total}.`
+  return `${each} is measured once, ${flashboot[0] === 'FLASHBOOT' ? 'with' : 'without'} FlashBoot${total}. Tick both to compare.`
 }
 
 // Mirrors internal/bench/params.go. Only the GPU image has torch for matmul.

@@ -35,21 +35,21 @@ export function SpecTable({
             </th>
             <th className="n">
               First boot
-              <Help text="Time for a brand-new endpoint's first worker to answer, image pull and boot included; one sample per configuration." />
+              <Help text="Time for a brand-new endpoint's first worker to answer, image pull and boot included. One sample per configuration, so (n) is 1, or 0 if it never finished." />
             </th>
             <th className="n">
               {cold}, typical
               <Help
                 text={
                   forced
-                    ? "The median extra time a request took when the endpoint had been paused, so it started a brand-new worker; FlashBoot can't help one."
-                    : 'The median extra time a request took when no worker was running.'
+                    ? "The median extra time a request took when the endpoint had been paused, so it started a brand-new worker; FlashBoot can't help one. (n) is how many cold-start samples completed."
+                    : 'The median extra time a request took when no worker was running. (n) is how many cold-start samples completed.'
                 }
               />
             </th>
             <th className="n">
               Warm, typical
-              <Help text="The median time for a request answered by a worker that was already running." />
+              <Help text="The median time for a request answered by a worker that was already running. (n) is how many warm requests completed." />
             </th>
             <th className="n">
               {rps > 0 ? `At ${rps} req/s` : 'At the top load'}

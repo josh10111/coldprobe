@@ -64,7 +64,8 @@ export function ComparePage() {
 
       <Section
         title="What you wait for and what you pay"
-        sub={'Each run\'s spec table, one row per configuration. "Typical" is the median; the small number is how many samples it rests on. Every trace in both tables uses the same scales.'}
+        sub={'Each run\'s spec table, one row per configuration. "Typical" is the median; the small number is how many samples it rests on.'}
+        more="Every trace in both tables uses the same scales."
       >
         {each.map(({ d, rows, traces }, i) => (
           <div key={d.run.id} className="brief">
@@ -77,7 +78,8 @@ export function ComparePage() {
       <Section
         title="Latency through the run"
         help="Each line point is the median wall time of that configuration's last 10 completed requests (fewer at the start), in send order, from the warm phase on."
-        sub={`One chart per run, on identical axes (0 to ${Math.round(extent.xMax)} s across, the same latency scale up), so a higher or longer line is a real difference. Colour is the run's first or second pool or card, dashed is FlashBoot on, as in the report.`}
+        sub="One chart per run, on identical axes, so a higher or longer line is a real difference."
+        more={`Both charts run 0 to ${Math.round(extent.xMax)} s across, with the same latency scale up. Colour is the run's first or second pool or card, dashed is FlashBoot on, as in the report.`}
       >
         {each.map(({ d, rows, traces }, i) => (
           <div key={d.run.id} className="multiple">

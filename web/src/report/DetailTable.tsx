@@ -28,15 +28,15 @@ export function DetailTable({ series, coldLabel }: { series: Series[]; coldLabel
               <th>Configuration</th>
               <th className="n">
                 First boot
-                <Help text="Time for a brand-new endpoint's first worker to answer, image pull and boot included; one sample." />
+                <Help text="Time for a brand-new endpoint's first worker to answer, image pull and boot included. (n) is 1, or 0 if it never finished." />
               </th>
               <th className="n">
                 {coldLabel === 'cold start' ? 'Cold start' : 'New-worker cold start'} <span className="count">typical / slowest 5% (n)</span>
-                <Help text="The extra time a cold start added to a request (total minus handler time): the median, the 95th percentile, and how many samples." />
+                <Help text="The extra time a cold start added to a request (total minus handler time): the median, the 95th percentile, and (n), how many cold-start samples completed." />
               </th>
               <th className="n">
                 Warm <span className="count">typical / slowest 5% (n)</span>
-                <Help text="A whole request to a running worker: the median, the 95th percentile, and how many samples." />
+                <Help text="A whole request to a running worker: the median, the 95th percentile, and (n), how many warm requests completed." />
               </th>
               <th className="n">
                 Completed
@@ -100,12 +100,6 @@ export function DetailTable({ series, coldLabel }: { series: Series[]; coldLabel
           </tbody>
         </table>
       </div>
-      <p className="cap">
-        Left queued: requests still waiting when a load level's drain time ran out (or stopped by a cancel or the budget
-        guard). Expected when you offer more than the workers can serve; it is the signal that a pool is at capacity.
-        Runpod's boot count: the first boot, our cold samples, and any worker Runpod added on its own under load; "—" when
-        Runpod's metrics couldn't be read before teardown.
-      </p>
     </>
   )
 }
@@ -125,7 +119,7 @@ export function GpuTable({ series }: { series: Series[] }) {
               </th>
               <th className="n">
                 TFLOPS, typical <span className="count">(n)</span>
-                <Help text="fp16 tera-FLOP/s the job measured (10 iterations, median) on that worker's GPU." />
+                <Help text="fp16 tera-FLOP/s each request measured (10 iterations, median) on that worker's GPU. Typical is the median across requests; (n) is how many completed requests on this GPU model reported a measurement, not how many workers." />
               </th>
               <th className="n">
                 Matmul ms <span className="count">typical / slowest 5%</span>
@@ -137,7 +131,7 @@ export function GpuTable({ series }: { series: Series[] }) {
               </th>
               <th className="n">
                 Cold CUDA init, typical <span className="count">(n)</span>
-                <Help text="Time to initialise CUDA on a fresh worker (first boot and cold jobs only)." />
+                <Help text="Time to initialise CUDA on a fresh worker (first boot and cold jobs only). Typical is the median; (n) is how many of those requests on this GPU model reported it." />
               </th>
             </tr>
           </thead>
@@ -163,10 +157,6 @@ export function GpuTable({ series }: { series: Series[] }) {
           </tbody>
         </table>
       </div>
-      <p className="cap">
-        Rows appear for runs on the GPU worker image; TFLOPS and matmul time need a matmul size. Pools can place a run on
-        several GPU models, so a configuration can have more than one row.
-      </p>
     </>
   )
 }
@@ -196,7 +186,7 @@ export function LevelTable({ rows }: { rows: LevelRow[] }) {
             </th>
             <th className="n">
               Latency, slowest 5% <span className="count">(n)</span>
-              <Help text="The wall time that 95% of this level's completed requests beat, counted from when each was scheduled to be sent." />
+              <Help text="The wall time that 95% of this level's completed requests beat, counted from when each was scheduled to be sent. (n) is how many of this level's requests completed." />
             </th>
             <th className="n">
               Completed req/s

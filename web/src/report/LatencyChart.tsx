@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react'
 import { CartesianGrid, ComposedChart, Line, ReferenceLine, ResponsiveContainer, Scatter, Tooltip, XAxis, YAxis } from 'recharts'
 import { placeMarkLabels, POOL_COLORS, unlabelledCaption, type PhaseMark } from '../chartData'
 import { secs } from '../format'
@@ -14,12 +15,14 @@ export function LatencyChart({
   extent,
   marks,
   notDrawn,
+  empty,
 }: {
   rows: SpecRow[]
   traces: Trace[]
   extent: { xMax: number; yMax: number }
   marks: PhaseMark[]
   notDrawn: number
+  empty?: ReactNode
 }) {
   const byKey = new Map(traces.map((t) => [t.key, t]))
   const drawn = traces.reduce((n, t) => n + t.dots.length + t.line.length, 0)
@@ -44,7 +47,7 @@ export function LatencyChart({
       }
     >
       {drawn === 0 ? (
-        <NoData text="No completed requests yet." />
+        (empty ?? <NoData text="No completed requests yet." />)
       ) : (
         <ResponsiveContainer width="100%" height={280}>
           <ComposedChart margin={{ top: 34, right: 16, bottom: 4, left: 4 }}>
