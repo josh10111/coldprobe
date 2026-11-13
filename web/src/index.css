@@ -116,6 +116,54 @@ a:hover {
 .section {
   margin: 28px 0 0;
 }
+.more {
+  margin: -4px 0 12px;
+  font-size: var(--fs-caption);
+  max-width: 80ch;
+}
+.more > summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  color: var(--text-soft);
+  list-style: none;
+}
+.more > summary::-webkit-details-marker {
+  display: none;
+}
+.more > summary::before {
+  content: '';
+  width: 0;
+  height: 0;
+  border-left: 5px solid currentColor;
+  border-top: 4px solid transparent;
+  border-bottom: 4px solid transparent;
+  transition: transform 0.15s;
+}
+.more[open] > summary::before {
+  transform: rotate(90deg);
+}
+.more > summary:hover {
+  color: var(--text);
+}
+.more > summary:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+.more-body {
+  margin-top: 6px;
+  padding: 8px 12px;
+  border-left: 2px solid var(--rule);
+  color: var(--muted);
+  line-height: 1.55;
+}
+.more-body p {
+  margin: 0 0 6px;
+}
+.more-body p:last-child {
+  margin-bottom: 0;
+}
 .section-sub {
   color: var(--muted);
   margin: 2px 0 10px;
@@ -333,6 +381,38 @@ h1 .mode {
   border-color: var(--measured);
   color: var(--measured);
   font-weight: 500;
+}
+.checks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.check {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: var(--fs-caption);
+  color: var(--muted);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 4px 12px 4px 9px;
+  cursor: pointer;
+}
+.check input {
+  margin: 0;
+  accent-color: var(--measured);
+  cursor: pointer;
+}
+.check.on {
+  border-color: var(--measured);
+  color: var(--text);
+}
+.check:has(input:focus-visible) {
+  outline: 2px solid var(--measured);
+  outline-offset: 1px;
+}
+.check-note {
+  margin: 6px 0 0;
 }
 .picker {
   margin-top: 12px;
@@ -677,12 +757,19 @@ h1 .mode {
   color: var(--text);
   border-color: var(--muted);
 }
-/* The native title tooltip only shows on hover; show it on keyboard focus too. */
-.q:focus-visible::after {
-  content: attr(aria-label);
+/* Bigger hit area than the 15px glyph. */
+.q::before {
+  content: '';
   position: absolute;
-  left: 0;
-  top: 20px;
+  inset: -6px;
+}
+.q[aria-expanded='true'] {
+  color: var(--text);
+  border-color: var(--muted);
+}
+.tip {
+  position: fixed;
+  z-index: 50;
   width: max-content;
   max-width: 260px;
   padding: 5px 9px;
@@ -690,15 +777,14 @@ h1 .mode {
   border: 1px solid var(--border);
   border-radius: var(--radius);
   color: var(--text);
+  font-family: var(--sans);
   font-size: var(--fs-caption);
+  font-weight: 400;
   line-height: 1.4;
   text-align: left;
   white-space: normal;
-  z-index: 5;
-}
-.q-left:focus-visible::after {
-  left: auto;
-  right: 0;
+  pointer-events: none;
+  box-shadow: 0 4px 14px rgb(0 0 0 / 0.35);
 }
 
 .bar {
@@ -709,6 +795,13 @@ h1 .mode {
 .bar > div {
   height: 100%;
   background: var(--price);
+}
+.progress-label {
+  margin-top: 10px;
+}
+.bar-progress > div {
+  background: var(--measured);
+  transition: width 0.4s ease-out;
 }
 
 .plain,
@@ -722,6 +815,92 @@ h1 .mode {
   font-size: var(--fs-caption);
   line-height: 1.6;
   color: var(--muted);
+  max-height: 260px;
+  overflow-y: auto;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  padding: 6px 0;
+}
+.log li {
+  padding: 1px 10px 1px 8px;
+  border-left: 2px solid transparent;
+}
+.log-time {
+  opacity: 0.7;
+}
+.log .log-ok {
+  color: var(--measured);
+  border-left-color: var(--measured);
+}
+.log .log-warn {
+  color: var(--waiting);
+  border-left-color: var(--waiting);
+}
+.log .log-bad {
+  color: var(--bad);
+  border-left-color: var(--bad);
+}
+.log-wrap {
+  position: relative;
+}
+.log-jump {
+  position: absolute;
+  right: 12px;
+  bottom: 10px;
+  font-size: var(--fs-caption);
+  padding: 3px 10px;
+  background: var(--raised);
+}
+
+.waiting {
+  padding: 22px 8px 18px;
+  max-width: 640px;
+  margin: 0 auto;
+}
+.waiting-title {
+  margin: 0 0 6px;
+  color: var(--waiting);
+  font-weight: 500;
+}
+.pulse-wait {
+  background: var(--waiting);
+}
+.waiting-list {
+  list-style: none;
+  margin: 12px 0 14px;
+  padding: 0;
+  font-size: var(--fs-caption);
+  line-height: 1.8;
+}
+.waiting-bar {
+  height: 3px;
+  background: var(--rule);
+  border-radius: 2px;
+  overflow: hidden;
+  position: relative;
+}
+.waiting-bar::after {
+  content: '';
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 30%;
+  background: var(--waiting);
+  border-radius: 2px;
+  animation: waiting-slide 1.6s ease-in-out infinite;
+}
+@keyframes waiting-slide {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(340%);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .waiting-bar::after,
+  .pulse {
+    animation: none;
+  }
 }
 .raw {
   font-family: var(--mono);

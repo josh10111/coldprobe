@@ -102,3 +102,24 @@ func TestOpenLoop_ZeroIntervalReturns(t *testing.T) {
 		t.Errorf("send called %d times at +Inf rps, want 0", n)
 	}
 }
+
+// A rate that doesn't divide a second evenly still sends exactly rps*dur:
+// 3 req/s for 1 s is 3, not a 4th due a nanosecond before the end.
+func TestOpenLoop_ExactCountForUnevenRates(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		rps  float64
+		dur  time.Duration
+		want int64
+	}{
+		{3, time.Second, 3},
+		{7, time.Second, 7},
+		{6, 500 * time.Millisecond, 3},
+	} {
+		var n atomic.Int64
+		OpenLoop(context.Background(), tc.rps, tc.dur, func(context.Context, time.Time) { n.Add(1) })
+		if got := n.Load(); got != tc.want {
+			t.Errorf("%v req/s for %v: %d sends, want %d", tc.rps, tc.dur, got, tc.want)
+		}
+	}
+}

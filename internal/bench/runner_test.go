@@ -562,6 +562,46 @@ func oneConfig() Params {
 }
 
 // Every phase transition is logged, and long waits repeat a "still waiting" line.
+func TestRun_LogLevels(t *testing.T) {
+	t.Parallel()
+	h := newHarness(t, fakerunpod.TestOptions(), nil)
+	h.r.ProgressEvery = 10 * time.Millisecond
+	p := oneConfig()
+	p.DrainSeconds = 2
+
+	h.runToEnd(t, p)
+
+	want := []struct{ prefix, level string }{
+		{"first boot: waiting for a worker on AMPERE_16", "wait"},
+		{"still waiting for a worker (", "wait"},
+		{"first boot: worker ", "ok"},
+		{"cold sample 1/2: waiting for workers to scale to zero", "wait"},
+		{"cold sample 1/2: sending", ""},
+		{"cold sample 1/2: done in ", "ok"},
+		{"warm: 3 of 3 completed", "ok"},
+		{"level 10 req/s: ", "ok"},
+		{"collecting Runpod metrics (up to ", "wait"},
+		{"endpoint deleted", "ok"},
+	}
+	var got []string
+	i := 0
+	for _, e := range h.eventsOf("log") {
+		d := e.Data.(map[string]any)
+		msg, _ := d["msg"].(string)
+		level, _ := d["level"].(string)
+		got = append(got, level+" | "+msg)
+		if i < len(want) && strings.HasPrefix(msg, want[i].prefix) && !strings.Contains(msg, "sending for") {
+			if level != want[i].level {
+				t.Errorf("%q: level %q, want %q", msg, level, want[i].level)
+			}
+			i++
+		}
+	}
+	if i < len(want) {
+		t.Errorf("missing %q (in order) from the log events:\n%s", want[i].prefix, strings.Join(got, "\n"))
+	}
+}
+
 func TestRun_PhaseLogsInOrder(t *testing.T) {
 	t.Parallel()
 	h := newHarness(t, fakerunpod.TestOptions(), nil)

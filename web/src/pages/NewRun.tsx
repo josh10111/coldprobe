@@ -6,6 +6,7 @@ import { Help, Price, StockWord } from '../components'
 import { configName, usd } from '../format'
 import {
   estimateKey,
+  flashbootSummary,
   formErrors,
   formFromDefaults,
   GPU_IMAGE,
@@ -172,20 +173,24 @@ export function NewRun() {
         </p>
       ))}
 
-      <div className="lbl">
-        FlashBoot
-        <Help text="Runpod's faster cold start; pick both to compare it on and off." />
+      <div className="lbl" id="flashboot-lbl">
+        FlashBoot: settings to measure
+        <Help text="FlashBoot is Runpod's faster cold start. This isn't an on/off switch: tick one setting to measure just that, or tick both to measure each GPU twice, on separate endpoints, and compare them." />
       </div>
-      <div className="toggles">
+      <div className="checks" role="group" aria-labelledby="flashboot-lbl" aria-describedby="flashboot-summary">
         {(['OFF', 'FLASHBOOT'] as const).map((f) => {
           const on = form.flashboot.includes(f)
           return (
-            <button key={f} type="button" className={on ? 'toggle on' : 'toggle'} aria-pressed={on} onClick={() => toggleFlash(f)}>
-              {f === 'OFF' ? 'Off' : 'On'}
-            </button>
+            <label key={f} className={on ? 'check on' : 'check'}>
+              <input type="checkbox" checked={on} onChange={() => toggleFlash(f)} />
+              {f === 'OFF' ? 'Without FlashBoot' : 'With FlashBoot'}
+            </label>
           )
         })}
       </div>
+      <p id="flashboot-summary" className={errors.flashboot ? 'bad small check-note' : 'mut small check-note'}>
+        {flashbootSummary(form.flashboot, selected.length)}
+      </p>
 
       <div className="grid3">
         <NumField

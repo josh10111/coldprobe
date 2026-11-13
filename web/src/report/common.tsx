@@ -3,7 +3,28 @@ import { Help } from '../components'
 
 // Shared report pieces. Legends are HTML, easier to style than Recharts' own.
 
-export function Section({ title, help, sub, children }: { title: string; help?: string; sub?: ReactNode; children: ReactNode }) {
+export function More({ children }: { children: ReactNode }) {
+  return (
+    <details className="more">
+      <summary>How to read this</summary>
+      <div className="more-body">{children}</div>
+    </details>
+  )
+}
+
+export function Section({
+  title,
+  help,
+  sub,
+  more,
+  children,
+}: {
+  title: string
+  help?: string
+  sub?: ReactNode
+  more?: ReactNode
+  children: ReactNode
+}) {
   return (
     <section className="section" aria-label={title}>
       <h2>
@@ -11,6 +32,7 @@ export function Section({ title, help, sub, children }: { title: string; help?: 
         {help && <Help text={help} />}
       </h2>
       {sub && <p className="section-sub">{sub}</p>}
+      {more && <More>{more}</More>}
       {children}
     </section>
   )

@@ -139,3 +139,63 @@ export function liveWords(p: Params, cd: ConfigDetail, nowMs: number, activity?:
   }
   return { [columnOf(i)]: `${step.label} · ${detail}` }
 }
+
+export interface FirstBootWait {
+  text: string
+  tone?: 'ok' | 'warn' | 'bad'
+}
+
+export function firstBootWait(cd: ConfigDetail, nowMs: number): FirstBootWait {
+  const fb = cd.jobs.find((j) => j.phase === 'first_boot' && ok(j))
+  if (fb) return { text: `worker connected · first request in ${secs(fb.wallMs)}`, tone: 'ok' }
+  switch (cd.config.status) {
+    case 'pending':
+      return { text: 'queued' }
+    case 'creating':
+      return { text: 'creating the endpoint', tone: 'warn' }
+    case 'running': {
+      const so = Math.floor(Math.max(0, nowMs - Date.parse(cd.config.createdAt)) / 1000)
+      return { text: `waiting for a GPU worker · ${secs(so * 1000)}`, tone: 'warn' }
+    }
+    case 'failed':
+      return { text: 'failed', tone: 'bad' }
+    default:
+      return { text: cd.config.status.replace('_', ' ') }
+  }
+}
+
+export interface RunProgress {
+  fraction: number // 0 to 1
+  configsDone: number
+  configs: number
+}
+
+// Every phase of every config weighs the same, so this is how far through the
+// run is, not a time estimate: phases take very different times.
+export function runProgress(p: Params, configs: ConfigDetail[]): RunProgress {
+  const phases = 3 + p.levelsRps.length
+  let sum = 0
+  let configsDone = 0
+  for (const cd of configs) {
+    const s = cd.config.status
+    if (s === 'done' || s === 'failed' || s === 'cancelled') {
+      sum += 1
+      configsDone++
+      continue
+    }
+    const count = (phase: Job['phase'], rps?: number) =>
+      cd.jobs.filter((j) => j.phase === phase && (rps === undefined || j.level === rps)).length
+    const part = (n: number, of: number) => (of > 0 ? Math.min(1, n / of) : 1)
+    const fb = cd.jobs.some((j) => j.phase === 'first_boot' && ok(j)) ? 1 : 0
+    const steps = phaseSteps(p, cd)
+    let f = fb
+    // Skipped cold samples ('short') and phases already passed count as done.
+    f += steps[1].state === 'done' || steps[1].state === 'short' ? 1 : part(count('cold'), p.coldStarts)
+    f += steps[2].state === 'done' ? 1 : part(count('warm'), p.warmRequests)
+    p.levelsRps.forEach((rps, i) => {
+      f += steps[3 + i].state === 'done' ? 1 : part(count('load', rps), expectedLoadJobs(rps, p.levelSeconds))
+    })
+    sum += f / phases
+  }
+  return { fraction: configs.length ? sum / configs.length : 0, configsDone, configs: configs.length }
+}

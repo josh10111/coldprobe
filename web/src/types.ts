@@ -259,9 +259,12 @@ export interface CostEvent extends EventBase {
   data: { boundUsd: number; capUsd: number }
 }
 
+export type LogLevel = 'ok' | 'wait' | 'note' | 'warn' | 'error'
+
 export interface LogEvent extends EventBase {
   type: 'log'
-  data: { msg: string; level?: 'warn' | 'error' }
+  // 'warn' is only the no-worker warning, which is also toasted.
+  data: { msg: string; level?: LogLevel }
 }
 
 export type RunEvent = RunStatusEvent | ConfigStatusEvent | JobEvent | CostEvent | LogEvent

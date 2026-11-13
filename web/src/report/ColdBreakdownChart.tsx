@@ -15,7 +15,7 @@ export function ColdBreakdownChart({ series, coldLabel }: { series: Series[]; co
   return (
     <Frame
       title={`Where a ${coldLabel}'s time goes`}
-      help="Typical waiting for a worker (Runpod's delayTime median), then typical handler time (executionTime median); network and client overhead isn't drawn."
+      help="Typical waiting for a worker (Runpod's delayTime median), then typical handler time (executionTime median); network and client overhead isn't drawn. (n) after each row is how many cold-start samples the medians rest on."
       sub="Typical cold start split into waiting for a worker (Runpod's queue time, boot included) and running the handler."
       legend={
         <>
